@@ -301,10 +301,113 @@ def announcement_panels(hist,out,demo=False):
     b.text(.06,.09,'Variação: '+(f'{100*d/base:+.2f}%'.replace('.',',') if base>0 else '—'),transform=b.transAxes,fontsize=8,color=MUTED)
     footer(f);save(f,out,'hap-destaques.png')
 
+def announcement_panel(hist, out, demo=False):
+    """One compact, automatically refreshed image matching the HAP announcement."""
+    from matplotlib.patches import FancyBboxPatch, Polygon
+    s=hist[-1]
+    f=plt.figure(figsize=(6.2,14.5),dpi=120,facecolor=BG)
+    a=f.add_axes([0,0,1,1]); a.set_xlim(0,620); a.set_ylim(1450,0); a.axis('off')
+    border='#c4ab76'; dark='#77562e'; cream='#fff5dc'; red='#8b302b'
+    def text(x,y,label,size=10,color=INK,bold=False,align='center'):
+        a.text(x,y,str(label),ha=align,va='center',fontsize=size,color=color,
+               fontweight='bold' if bold else 'normal',fontfamily='DejaVu Sans')
+    def box(x,y,w,h,fill=cream,edge=border):
+        a.add_patch(FancyBboxPatch((x,y),w,h,boxstyle='round,pad=0,rounding_size=7',
+                    facecolor=fill,edgecolor=edge,linewidth=1.1))
+    def line(y):
+        a.plot([24,596],[y,y],color=border,lw=1.3)
+    box(5,5,610,1440,BG,border)
+    # Crisp heraldic shield; no outline on letters.
+    for xs,xe,y in [(55,175,108),(445,565,108),(90,205,137),(415,530,137)]:
+        a.plot([xs,xe],[y,y],color=border,lw=2)
+    shield=[(310,24),(385,54),(385,118),(374,151),(347,181),(310,203),(273,181),(246,151),(235,118),(235,54)]
+    a.add_patch(Polygon(shield,closed=True,facecolor='#392a25',edgecolor='#a77b35',linewidth=3))
+    inner=[(310+(x-310)*.83,113+(y-113)*.83) for x,y in shield]
+    a.add_patch(Polygon(inner,closed=True,facecolor='#762722',edgecolor='#c3a163',linewidth=1.6))
+    for p,q in [((271,76),(349,152)),((349,76),(271,152))]:
+        a.plot([p[0],q[0]],[p[1],q[1]],color='#ddc692',lw=4,solid_capstyle='round')
+    for p,q in [((329,149),(348,130)),((272,130),(291,149))]:
+        a.plot([p[0],q[0]],[p[1],q[1]],color='#ddc692',lw=3,solid_capstyle='round')
+    a.add_patch(FancyBboxPatch((280,99),60,29,boxstyle='round,pad=1,rounding_size=4',facecolor='#392a25',edgecolor='#c3a163',lw=1))
+    text(310,113,'HAP',13,'#fff1c7',True)
+    text(310,228,s['name'].upper(),17,red,True)
+    text(310,251,'ESQUADRÃO DE ELITE',11,dark,True)
+    text(310,274,'Lealdade  •  Estratégia  •  União  •  Conquista',8,MUTED)
+    line(295)
+    text(310,318,'A NOSSA MISSÃO',11,red,True)
+    text(310,343,'Proteger os nossos membros. Fortalecer o nosso território.',9.2,INK)
+    text(310,362,'Evoluir como uma equipa.',9.2,INK)
+    line(383)
+    text(310,406,'CENTRAL DE ESTATÍSTICAS',13,red,True)
+    text(310,430,('DEMONSTRAÇÃO — DADOS FICTÍCIOS' if demo else 'Mundo '+s['world'][2:]+'  •  Dados públicos do jogo'),8.5,MUTED)
+    cutoff=datetime.fromisoformat(s['time'])-timedelta(days=7)
+    recent=[z for z in hist if datetime.fromisoformat(z['time'])>=cutoff]
+    fields=[('Pontos','points',GREEN),('Classificação','rank',GOLD),('Aldeias','villages',BLUE),('Membros','members',RED)]
+    for i,(label,key,color) in enumerate(fields):
+        x=24+290*(i%2); y=447+162*(i//2)
+        box(x,y,282,154)
+        text(x+141,y+19,label,10,dark,True)
+        val=s.get(key)
+        text(x+141,y+47,('#' if key=='rank' and val is not None else '')+fmt(val),18,INK,True)
+        ax=f.add_axes([(x+18)/620,1-(y+138)/1450,246/620,67/1450],facecolor=cream)
+        ts=[local(z['time']) for z in recent]; vs=[z.get(key) for z in recent]
+        ax.spines[['top','right']].set_visible(False)
+        ax.spines[['left','bottom']].set_color('#d6c39d')
+        ax.tick_params(left=False,bottom=False,labelleft=False,labelbottom=False)
+        ax.yaxis.set_major_locator(MaxNLocator(nbins=3,integer=True))
+        ax.grid(axis='y',color='#ddd0b3',lw=.7)
+        if any(v is not None for v in vs):
+            ax.plot(ts,vs,color=color,lw=2.2,marker='o' if len(ts)<=8 else None,markersize=3.8)
+            if len(ts)==1: ax.set_xlim(ts[0]-timedelta(minutes=30),ts[0]+timedelta(minutes=30))
+            if key=='rank': ax.invert_yaxis()
+        else: ax.text(.5,.5,'Indisponível',transform=ax.transAxes,ha='center',color=MUTED,fontsize=8)
+    text(310,782,'Últimos 7 dias  •  '+str(len(recent))+' observações',8,MUTED)
+    line(801)
+    text(310,824,'DESEMPENHO MILITAR',11,red,True)
+    for i,(label,key) in enumerate([('Ataque','oda'),('Defesa','odd'),('Total OD','od')]):
+        x=24+193*i; box(x,847,186,84)
+        text(x+93,863,label,9,dark,True)
+        val=s.get(key)
+        text(x+93,888,fmt(val),14 if len(fmt(val))<10 else 10,INK,True)
+        text(x+93,916,'Indisponível' if val is None else 'Pontos de adversários',7.4,MUTED)
+    line(948)
+    text(310,971,'DESTAQUES DAS ÚLTIMAS 24H',11,red,True)
+    box(24,994,572,153,cream,cream)
+    target=datetime.fromisoformat(s['time'])-timedelta(days=1)
+    eligible=[z for z in hist if z.get('players') is not None and datetime.fromisoformat(z['time'])<=target and target-datetime.fromisoformat(z['time'])<=timedelta(hours=3)]
+    best=None
+    if eligible and s.get('players') is not None:
+        prev={p[0]:p[2] for p in eligible[-1]['players']}
+        changes=[(p[2]-prev[p[0]],p[1]) for p in s['players'] if p[0] in prev]
+        if changes: best=max(changes,key=lambda p:p[0])
+    dp=delta(hist,'points'); dv=delta(hist,'villages')
+    def signed(v): return '—' if v is None else ('+' if v>0 else '')+fmt(v)
+    if best is None and dp is None and dv is None: text(310,1012,'A aguardar histórico suficiente',8.5,MUTED)
+    else: text(310,1012,'Comparação com dados de cerca de 24h atrás',8.5,MUTED)
+    best_label=(best[1][:25]+'  '+signed(best[0])+' pts') if best is not None else '—'
+    text(310,1037,'Melhor evolução individual  •  '+best_label,9,INK,True)
+    text(310,1065,'Crescimento diário da tribo  •  '+signed(dp)+' pts' if dp is not None else 'Crescimento diário da tribo  •  —',9,INK)
+    text(310,1093,'Expansão territorial  •  '+signed(dv)+' aldeias' if dv is not None else 'Expansão territorial  •  —',9,INK)
+    text(310,1128,'Variação de aldeias, não conquistas confirmadas',7.2,MUTED)
+    line(1162)
+    text(310,1186,'HISTÓRICO DE EVOLUÇÃO',11,red,True)
+    for i,n in enumerate(['7d','15d','30d','60d','90d']):
+        x=209+42*i; box(x,1203,35,34,BG,border);text(x+17.5,1220,n,9,dark,True)
+    text(310,1256,'Consultar estatísticas completas • Ligações abaixo',8.5,BLUE,True)
+    line(1276)
+    for y,t in [(1300,'JUNTOS EVOLUÍMOS.'),(1321,'JUNTOS LUTAMOS.'),(1342,'JUNTOS CONQUISTAMOS.')]:
+        text(310,y,t,10.5,red,True)
+    text(310,1370,'LÍDER & FUNDADOR',9,dark,True)
+    text(310,1390,'pr0m4xine111',9,INK,True)
+    text(310,1412,'HAP STATS • Mundo '+s['world'][2:],7.8,MUTED)
+    text(310,1431,'Consulta: '+local(s['time']).strftime('%d/%m/%Y %H:%M %Z'),7.8,MUTED)
+    save(f,out,'painel.png')
+
 def render(hist,out,demo=False):
     out.mkdir(parents=True,exist_ok=True); s=hist[-1]
     summary(hist,out,demo)
     compact_charts(hist,out,demo)
+    announcement_panel(hist,out,demo)
     announcement_panels(hist,out,demo)
     chart(hist,out,'Evolução económica e territorial',[('Pontos','points',GREEN),('Classificação (menor é melhor)','rank',GOLD),('Aldeias','villages',BLUE),('Membros','members',RED)],'evolucao.png',demo,30)
     chart(hist,out,'Desempenho militar',[('Ataque · ODA','oda',RED),('Defesa · ODD','odd',BLUE),('Total · OD','od',GOLD),('Pontos de todos','all_points',GREEN)],'militar.png',demo,30)
