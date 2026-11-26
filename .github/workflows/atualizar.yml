@@ -1,0 +1,43 @@
+name: Atualizar estatísticas HAP
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 * * * *'
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+concurrency:
+  group: hap-stats-pages
+  cancel-in-progress: false
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - run: python atualizar.py
+      - name: Guardar histórico
+        run: |
+          git config user.name 'hap-stats[bot]'
+          git config user.email 'hap-stats[bot]@users.noreply.github.com'
+          git add data/history.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'Atualizar histórico da tribo'
+            git push
+          fi
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+      - uses: actions/deploy-pages@v4
+        id: deploy
