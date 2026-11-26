@@ -208,10 +208,104 @@ def compact_charts(hist, out, demo=False):
         f.text(.96,.065,'Consulta: '+local(s['time']).strftime('%d/%m %H:%M %Z'),ha='right',color=MUTED,fontsize=7.5)
         save(f,out,'grafico-'+key+'.png')
 
+def announcement_panels(hist,out,demo=False):
+    """Compact images for the game announcement. Public observations only."""
+    from matplotlib.patches import Polygon
+    from matplotlib.font_manager import FontProperties
+    s=hist[-1]
+    now=datetime.fromisoformat(s['time'])
+    data=[x for x in hist if datetime.fromisoformat(x['time'])>=now-timedelta(days=30)]
+    stamp=local(s['time']).strftime('%d/%m/%Y %H:%M %Z')
+    bg='#f3e5c6'; border='#cbb58b'
+    def footer(f):
+        f.text(.035,.035,'DEMONSTRAÇÃO' if demo else 'PT119 · '+str(len(data))+' consultas',fontsize=7,color=MUTED)
+        f.text(.965,.035,'Consulta: '+stamp,ha='right',fontsize=7,color=MUTED)
+    def panel(f,rect):
+        a=f.add_axes(rect,facecolor=PANEL);a.set_xticks([]);a.set_yticks([])
+        for sp in a.spines.values(): sp.set_color(border)
+        return a
+    def trend(a,key,color):
+        times=[local(x['time']) for x in data]; vals=[x.get(key) for x in data]
+        if not any(v is not None for v in vals):
+            a.text(.5,.5,'Dados indisponíveis',transform=a.transAxes,ha='center',va='center',color=MUTED,fontsize=9)
+            return
+        a.plot(times,vals,color=color,lw=1.8,marker='o' if len(times)<=12 else None,markersize=3)
+        if len(times)==1:
+            a.set_xlim(times[0]-timedelta(hours=1),times[0]+timedelta(hours=1));a.set_xticks(times)
+        else: a.xaxis.set_major_locator(mdates.AutoDateLocator(minticks=2,maxticks=3,tz=TZ))
+        a.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M' if times[-1]-times[0]<timedelta(days=1) else '%d/%m',tz=TZ))
+        a.yaxis.set_major_locator(MaxNLocator(integer=True,nbins=3))
+        a.yaxis.set_major_formatter(FuncFormatter(lambda x,p:fmt(int(x))))
+        a.tick_params(labelsize=7,colors=MUTED,length=2,pad=2)
+        a.grid(axis='y',color='#ddd0b3',alpha=.8)
+        if key=='rank': a.invert_yaxis()
+    def change(key):
+        d=delta(hist,key)
+        if d is None: return '24h: sem histórico',MUTED
+        if key=='rank': return ('24h: '+str(abs(d))+' posições '+('ganhas' if d<0 else 'perdidas')) if d else '24h: sem alteração', GREEN if d<0 else RED if d>0 else MUTED
+        return '24h: '+('+' if d>0 else '')+fmt(d), GREEN if d>0 else RED if d<0 else MUTED
+    # Original vector heraldic motif, independent of third-party images.
+    f=plt.figure(figsize=(6.2,1.55),dpi=120,facecolor=bg)
+    a=f.add_axes([.035,.08,.22,.84]);a.set_xlim(0,100);a.set_ylim(0,100);a.set_aspect('equal');a.axis('off')
+    a.add_patch(Polygon([(50,97),(89,78),(89,43),(78,20),(50,3),(22,20),(11,43),(11,78)],closed=True,facecolor='#392a25',edgecolor=GOLD,lw=2))
+    a.add_patch(Polygon([(50,88),(81,72),(81,45),(71,25),(50,13),(29,25),(19,45),(19,72)],closed=True,facecolor='#762722',edgecolor='#c3a163',lw=1))
+    a.plot([32,68],[70,34],color='#ddc692',lw=3);a.plot([68,32],[70,34],color='#ddc692',lw=3)
+    a.text(50,51,'HAP',ha='center',va='center',color='#fff1c7',fontsize=13,weight='bold',bbox=dict(facecolor='#762722',edgecolor='none',pad=1))
+    f.text(.62,.72,'HUNTERS ANTI PEST',ha='center',weight='bold',fontsize=17,color='#762722')
+    f.text(.62,.46,'ESQUADRÃO DE ELITE',ha='center',weight='bold',fontsize=12,color=INK)
+    f.text(.62,.22,'LEALDADE  ·  ESTRATÉGIA  ·  UNIÃO  ·  CONQUISTA',ha='center',fontsize=7.5,color=MUTED)
+    save(f,out,'hap-brasao.png')
+    # Two-by-two economic dashboard with readable axes and compact spacing.
+    f=plt.figure(figsize=(6.2,3.55),dpi=120,facecolor=bg)
+    for i,(label,key,color) in enumerate([('Pontos','points',GREEN),('Classificação mundial','rank',GOLD),('Aldeias','villages',BLUE),('Membros','members',RED)]):
+        x=.035+(i%2)*.48;y=.54-(i//2)*.45
+        a=panel(f,[x,y,.45,.41])
+        a.text(.055,.89,label,transform=a.transAxes,fontsize=9,weight='bold',color=MUTED)
+        a.text(.055,.68,('#' if key=='rank' else '')+fmt(s.get(key)),transform=a.transAxes,fontsize=19,weight='bold',color=INK)
+        msg,c=change(key);a.text(.96,.72,msg,transform=a.transAxes,ha='right',fontsize=7,color=c)
+        b=f.add_axes([x+.085,y+.07,.34,.19],facecolor=PANEL);trend(b,key,color)
+        for sp in b.spines.values(): sp.set_color(border)
+    footer(f);save(f,out,'hap-economia.png')
+    # Military data: no large empty charts; missing is never interpreted as zero.
+    f=plt.figure(figsize=(6.2,1.15),dpi=120,facecolor=bg)
+    for i,(label,key,color) in enumerate([('Ataque · ODA','oda',RED),('Defesa · ODD','odd',BLUE),('Total · OD','od',GOLD)]):
+        a=panel(f,[.035+i*.32,.22,.29,.72])
+        a.text(.07,.79,label,transform=a.transAxes,fontsize=9,weight='bold',color=color)
+        a.text(.07,.43,fmt(s.get(key)),transform=a.transAxes,fontsize=18,weight='bold',color=INK)
+        msg,c=change(key);a.text(.07,.12,'Indisponível' if s.get(key) is None else msg,transform=a.transAxes,fontsize=8,color=c)
+    footer(f);save(f,out,'hap-militar.png')
+    # Daily leaders use only comparable public points; new members excluded.
+    prior=[x for x in hist if x.get('players') is not None and now-timedelta(hours=27)<=datetime.fromisoformat(x['time'])<=now-timedelta(hours=24)]
+    players=s.get('players')
+    leaders=[]
+    if prior and players is not None:
+        prev={p[0]:p for p in prior[-1]['players']}
+        leaders=sorted([(p[1],p[2]-prev[p[0]][2]) for p in players if p[0] in prev],key=lambda p:(-p[1],p[0]))[:5]
+    f=plt.figure(figsize=(6.2,2.15),dpi=120,facecolor=bg)
+    a=panel(f,[.035,.14,.45,.8]);b=panel(f,[.515,.14,.45,.8])
+    a.text(.06,.89,'TOP 5 · EVOLUÇÃO 24H',transform=a.transAxes,color=RED,weight='bold',fontsize=9)
+    if leaders:
+        for i,(name,gain) in enumerate(leaders):
+            y=.72-i*.14
+            a.text(.06,y,str(i+1)+'. '+name[:21],transform=a.transAxes,fontsize=8,color=INK,parse_math=False)
+            a.text(.94,y,('+' if gain>0 else '')+fmt(gain),transform=a.transAxes,ha='right',fontsize=8,weight='bold',color=GREEN if gain>0 else RED if gain<0 else MUTED)
+    else:
+        a.text(.5,.49,'A aguardar 24h de histórico\ncomparável dos membros.',ha='center',va='center',transform=a.transAxes,fontsize=8,color=MUTED)
+    b.text(.06,.89,'TRIBO · CRESCIMENTO 24H',transform=b.transAxes,color=RED,weight='bold',fontsize=9)
+    for i,(label,key) in enumerate([('Pontos','points'),('Posição','rank'),('Aldeias','villages'),('Membros','members')]):
+        d=delta(hist,key);y=.72-i*.14
+        b.text(.06,y,label,transform=b.transAxes,fontsize=8,color=INK)
+        v='—' if d is None else ('+' if (d<0 if key=='rank' else d>0) else '')+fmt(-d if key=='rank' else d)
+        b.text(.94,y,v,transform=b.transAxes,ha='right',fontsize=9,weight='bold',color=GREEN if d is not None and (d<0 if key=='rank' else d>0) else MUTED)
+    d=delta(hist,'points');base=s['points']-d if d is not None else 0
+    b.text(.06,.09,'Variação: '+(f'{100*d/base:+.2f}%'.replace('.',',') if base>0 else '—'),transform=b.transAxes,fontsize=8,color=MUTED)
+    footer(f);save(f,out,'hap-destaques.png')
+
 def render(hist,out,demo=False):
     out.mkdir(parents=True,exist_ok=True); s=hist[-1]
     summary(hist,out,demo)
     compact_charts(hist,out,demo)
+    announcement_panels(hist,out,demo)
     chart(hist,out,'Evolução económica e territorial',[('Pontos','points',GREEN),('Classificação (menor é melhor)','rank',GOLD),('Aldeias','villages',BLUE),('Membros','members',RED)],'evolucao.png',demo,30)
     chart(hist,out,'Desempenho militar',[('Ataque · ODA','oda',RED),('Defesa · ODD','odd',BLUE),('Total · OD','od',GOLD),('Pontos de todos','all_points',GREEN)],'militar.png',demo,30)
     # Additional historical views at stable addresses.
