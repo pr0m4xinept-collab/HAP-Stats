@@ -165,9 +165,53 @@ def member_html(hist):
     rivals=''.join(f"<tr><td>{html.escape(t['name'])}</td><td>{t['rank']}</td><td>{fmt(t['points'])}</td></tr>" for t in s.get('rivals',[]))
     return '<h2>Membros — dados públicos</h2><p>'+events+'</p><table><thead><tr><th>Jogador</th><th>Pontos</th><th>Δ 24h</th><th>Posição</th><th>Aldeias</th></tr></thead><tbody>'+table+'</tbody></table><h2>Tribos próximas no ranking</h2><table><tr><th>Tribo</th><th>Posição</th><th>Pontos</th></tr>'+rivals+'</table><p>Variações de membros e aldeias não equivalem necessariamente a conquistas ou perdas militares.</p>'
 
+def compact_charts(hist, out, demo=False):
+    """Seven independent images for the in-game announcement."""
+    s=hist[-1]
+    cutoff=datetime.fromisoformat(s['time'])-timedelta(days=30)
+    data=[x for x in hist if datetime.fromisoformat(x['time'])>=cutoff]
+    fields=[('points','Pontos',GREEN),('rank','Classificação mundial',GOLD),
+            ('villages','Aldeias',BLUE),('members','Membros',RED),
+            ('oda','Ataque (ODA)',RED),('odd','Defesa (ODD)',BLUE),
+            ('od','Adversários derrotados (OD)',GOLD)]
+    for key,label,color in fields:
+        f=plt.figure(figsize=(6.2,1.65),dpi=100,facecolor=BG)
+        a=f.add_axes([.36,.24,.60,.65],facecolor=PANEL)
+        for spine in a.spines.values(): spine.set_color('#d6c39d')
+        value=s.get(key)
+        f.text(.04,.78,label,fontsize=9.5,color=MUTED,weight='bold')
+        f.text(.04,.49,('#' if key=='rank' and value is not None else '')+fmt(value),
+               fontsize=19 if len(fmt(value))<9 else 15,color=INK,weight='bold')
+        d=delta(hist,key)
+        ds='24h: sem histórico' if d is None else '24h: '+('+' if d>0 else '')+fmt(d)
+        f.text(.04,.28,ds,fontsize=8,color=MUTED if d in (None,0) else (GREEN if (d<0 if key=='rank' else d>0) else RED))
+        times=[local(x['time']) for x in data]
+        vals=[x.get(key) for x in data]
+        if not any(v is not None for v in vals):
+            a.text(.5,.5,'Dados ainda indisponíveis',ha='center',va='center',transform=a.transAxes,color=MUTED,fontsize=9)
+            a.set_xticks([]);a.set_yticks([])
+        else:
+            a.plot(times,vals,color=color,linewidth=2,marker='o' if len(data)<=12 else None,markersize=3.5)
+            if len(times)==1:
+                a.set_xlim(times[0]-timedelta(minutes=60),times[0]+timedelta(minutes=60))
+                a.set_xticks(times)
+            else:
+                a.xaxis.set_major_locator(mdates.AutoDateLocator(minticks=2,maxticks=4,tz=TZ))
+            span=times[-1]-times[0]
+            a.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M' if span<timedelta(days=1) else '%d/%m',tz=TZ))
+            a.yaxis.set_major_locator(MaxNLocator(integer=True,nbins=3))
+            a.yaxis.set_major_formatter(FuncFormatter(lambda x,p:fmt(int(x))))
+            a.tick_params(labelsize=7,colors=MUTED,length=2,pad=2)
+            a.grid(axis='y',color='#ddd0b3',alpha=.8)
+            if key=='rank': a.invert_yaxis()
+        f.text(.04,.065,'DEMONSTRAÇÃO' if demo else 'PT119 | '+str(len(data))+' observações',color=MUTED,fontsize=7.5)
+        f.text(.96,.065,'Consulta: '+local(s['time']).strftime('%d/%m %H:%M %Z'),ha='right',color=MUTED,fontsize=7.5)
+        save(f,out,'grafico-'+key+'.png')
+
 def render(hist,out,demo=False):
     out.mkdir(parents=True,exist_ok=True); s=hist[-1]
     summary(hist,out,demo)
+    compact_charts(hist,out,demo)
     chart(hist,out,'Evolução económica e territorial',[('Pontos','points',GREEN),('Classificação (menor é melhor)','rank',GOLD),('Aldeias','villages',BLUE),('Membros','members',RED)],'evolucao.png',demo,30)
     chart(hist,out,'Desempenho militar',[('Ataque · ODA','oda',RED),('Defesa · ODD','odd',BLUE),('Total · OD','od',GOLD),('Pontos de todos','all_points',GREEN)],'militar.png',demo,30)
     # Additional historical views at stable addresses.
